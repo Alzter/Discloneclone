@@ -58,6 +58,7 @@ let
 in
 pkgs.mkShell {
     buildInputs = with pkgs; [
+        discordchatexporter-cli
         tmux
         lunarvim
         gh
