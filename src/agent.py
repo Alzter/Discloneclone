@@ -214,6 +214,13 @@ Read the conversation, then tell me what you are thinking as you say:
             user_indices = conversation.iloc[indices]
             user_indices = user_indices[user_indices.Author == target_user].index
             user_indices = list(user_indices)
+
+            other_user_indices = conversation.iloc[indices]
+            other_user_indices = other_user_indices[other_user_indices.Author != target_user].index
+            other_user_indices = list(user_indices)
+            
+            # Exclude all messages by the target user which don't come before another user
+            user_indices = [i for i in user_indices if i > min(other_user_indices)]
             
             # For each user message
             for index in user_indices:
