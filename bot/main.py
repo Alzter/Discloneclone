@@ -5,6 +5,7 @@ from dotenv import load_dotenv
 import os
 import pandas as pd
 import parser
+from agent import Agent, ChatUnderstanding
 
 load_dotenv()
 token = os.getenv("DISCORD_TOKEN")
@@ -18,12 +19,13 @@ intents.members = True
 
 bot = commands.Bot(command_prefix='!',intents=intents)
 
+agent = Agent()
 
 @bot.event
 async def on_ready():
     print("AIzter2 is running")
 
-def to_dataframe(bot, messages : list):
+def to_dataframe(bot, messages : list) -> pd.DataFrame:
     # Sort messages in chronological order
     if messages[-1].created_at < messages[0].created_at:
         messages.reverse()
@@ -59,20 +61,39 @@ def to_dataframe(bot, messages : list):
 
     return(data)
 
+def understand_conversation(bot, messages : list, context : str | None = None) -> ChatUnderstanding:
+    """
+    Pass a series of Discord messages to the LLM to
+    understand them in terms of topic, relationship between users,
+    and alzter's level of interest in the conversation.
+    
+    Args:
+        messages (list[Message]): List of Discord messages.
+        context (str): Optional additional context related to the conversation.
+    Returns:
+        understanding(ChatUnderstanding): Understanding of the conversation. Has three items: "topic", "relationship", "interest".
+    """
+    message_df = to_dataframe(bot, messages)
+
+    understanding = agent.understand_conversation_pov(message_df, "alzter", context=context, tokens=128)
+
+    return understanding
+
 @bot.event
 async def on_message(message):
     
     if message.author == bot.user: return
-    history = [message async for message in message.channel.history(limit=10)]
-     
-    data = to_dataframe(bot, history)
-    print(data)
-
+         
     print(message.content)
     print(message.author)
     
+    # await message.channel.send("hi")
 
-    await message.channel.send("hi")
+    history = [message async for message in message.channel.history(limit=20)]
+    understanding = understand_conversation(bot, history)
+    relationship = understanding.relationship
+
+    await message.channel.send(understanding.topic)
     #await message.channel.send(message.channel.id)
 
     await bot.process_commands(message)
