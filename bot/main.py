@@ -61,23 +61,31 @@ def to_dataframe(bot, messages : list) -> pd.DataFrame:
 
     return(data)
 
-def understand_conversation(bot, messages : list, context : str | None = None) -> ChatUnderstanding:
+def understand_conversation(bot, message_df : pd.DataFrame, context : str | None = None) -> ChatUnderstanding:
     """
     Pass a series of Discord messages to the LLM to
     understand them in terms of topic, relationship between users,
     and alzter's level of interest in the conversation.
     
     Args:
-        messages (list[Message]): List of Discord messages.
+        message_df (DataFrame): DataFrame of messages.
         context (str): Optional additional context related to the conversation.
     Returns:
         understanding(ChatUnderstanding): Understanding of the conversation. Has three items: "topic", "relationship", "interest".
     """
-    message_df = to_dataframe(bot, messages)
 
     understanding = agent.understand_conversation_pov(message_df, "alzter", context=context, tokens=128)
 
     return understanding
+
+def generate_reply(bot, message_history : list) -> str:
+    message_df = to_dataframe(bot, message_history)
+
+    understanding = understand_conversation(bot, message_df)
+    
+    response = agent.reply(message_df, context=understanding.relationship)
+
+    return response 
 
 @bot.event
 async def on_message(message):
@@ -88,13 +96,11 @@ async def on_message(message):
     print(message.author)
     
     # await message.channel.send("hi")
-
-    history = [message async for message in message.channel.history(limit=20)]
-    understanding = understand_conversation(bot, history)
-    relationship = understanding.relationship
-
-    await message.channel.send(understanding.topic)
-    #await message.channel.send(message.channel.id)
+    
+    message_history = [message async for message in message.channel.history(limit=20)]
+    response = generate_reply(bot, message_history)
+    
+    await message.channel.send(response)
 
     await bot.process_commands(message)
 

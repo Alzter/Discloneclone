@@ -142,3 +142,15 @@ class Agent:
         #return f"Conversation topic:\n{topic}\n\nMy relationship with {other_users}:\n{relationship}\n\nMy interest in the conversation:\n{interest}"
         # return {"interest":interest,"relationship":relationship,"topic":topic}
         return ChatUnderstanding(interest=interest,relationship=relationship,topic=topic)
+
+    def reply(self, messages : pd.DataFrame, context : str | None = None) -> str:
+        """
+        Reply to a Discord conversation using a DataFrame of conversation history.
+        """
+        prompt = self.gen_prompt(messages,
+                              prompt="You are alzter. Read this conversation history and write a message to continue the conversation.",
+                              context=context)
+
+        response = self.model.generate(prompt, max_new_tokens=128).text
+
+        return response
