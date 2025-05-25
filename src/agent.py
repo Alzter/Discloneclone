@@ -265,7 +265,7 @@ Read the conversation, then tell me what you are thinking as you say:
             
         return pd.DataFrame(data)
     
-    def parse_conversations(self, conversations : list[pd.DataFrame], target_user : str, batch_size : int = 10, initial_context : str | None = None, use_context : bool = True, thinking_tokens : int = 0):
+    def conversations_to_dataset(self, conversations : list[pd.DataFrame], target_user : str, batch_size : int = 10, initial_context : str | None = None, use_context : bool = True, thinking_tokens : int = 0):
         """
         Parse all conversations from a user into a supervised text dataset.
 
