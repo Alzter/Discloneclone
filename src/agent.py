@@ -272,7 +272,7 @@ Read the conversation, then tell me what you are thinking as you say:
             
         return pd.DataFrame(data)
     
-    def conversations_to_dataset(self, conversations : list[pd.DataFrame], target_user : str, batch_size : int = 10, initial_context : str | None = None, use_context : bool = True, thinking_tokens : int = 0):
+    def conversations_to_dataset(self, conversations : list[pd.DataFrame], target_user : str, batch_size : int = 10, context : str | None = None, use_context : bool = True, thinking_tokens : int = 0):
         """
         Parse all conversations from a user into a supervised text dataset.
 
@@ -289,15 +289,13 @@ Read the conversation, then tell me what you are thinking as you say:
         """
         data = []
         
-        context_str = initial_context
-
         for i, conversation in enumerate(tqdm(conversations)):
             
-            items = self.conversation_to_dataset(conversation,target_user, batch_size=batch_size,initial_context=context_str,use_context=use_context,thinking_tokens=thinking_tokens)
+            items = self.conversation_to_dataset(conversation,target_user, batch_size=batch_size,initial_context=context,use_context=use_context,thinking_tokens=thinking_tokens)
             data.append(items)
             
-            if i < len(conversations) - 1 and use_context:
-                context_str = self.understand_conversation_pov(conversation, target_user=target_user, context=context_str).relationship
+            #if i < len(conversations) - 1 and use_context:
+            #    context_str = self.understand_conversation_pov(conversation, target_user=target_user, context=context_str).relationship
         
         data = pd.concat(data)
         return data
