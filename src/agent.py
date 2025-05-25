@@ -162,7 +162,7 @@ Read the conversation, then tell me what you are thinking as you say:
         
         return predicted_thought
 
-    def conversation_to_dataset(self, conversation : pd.DataFrame, target_user : str, batch_size : int = 10, use_context : bool = True, thinking_tokens : int = 0) -> pd.DataFrame:
+    def conversation_to_dataset(self, conversation : pd.DataFrame, target_user : str, batch_size : int = 10, use_context : bool = True, initial_context : str | None = None, thinking_tokens : int = 0) -> pd.DataFrame:
         """
         Convert a Discord conversation into a supervised chat dataset from the perspective of a given user.
         This can be used to predict messages from a given user (i.e., training a model to impersonate you).
@@ -177,8 +177,12 @@ Read the conversation, then tell me what you are thinking as you say:
             target_user (str): Which user we're trying to predict the messages of.
             batch_size (int, optional): Maximum number of new input messages per sample. Defaults to 10.
             use_context (bool, optional): If enabled, at the start of each new batch, a summarisation of the previous batch's conversation is given as context.
-                                          This helps eliminate loss of semantic meaning when slicing conversations into chunks of arbitrary size.
+                                          This helps eliminate loss of semantic meaning when slicing conversations into chunks of arbitrary size. Defaults to True.
+            initial_context (str, optional): If given, provides the context for the users' relationship.
             thinking_tokens (int, optional): If > 0, predicts the thoughts of the target user for each message using a given number of tokens. Defaults to 0.
+        
+        Returns:
+            dataset (DataFrame): NLP dataset with columns "content" (input) and "label" (output).
         """
         data = {"content" : [], "label" : []}
         
@@ -196,12 +200,14 @@ Read the conversation, then tell me what you are thinking as you say:
         # thought prediction prompt to improve its accuracy.
         full_context = "" 
         if thinking_tokens > 0:
-            full_context = self.understand_conversation_pov( conversation, target_user=target_user).relationship 
+            if initial_context: full_context = None 
+            else: full_context = self.understand_conversation_pov( conversation, target_user=target_user, context=initial_context ).relationship 
+        
         # Create an empty context for now
-        context_str = None
+        context_str = initial_context
         
         # For each batch
-        for i, indices in enumerate(tqdm(chunks, "Parsing conversation batches", position=0)):
+        for i, indices in enumerate(chunks):
             start_index = indices[0]
             
             # Get the indices of the target user's messages
@@ -210,7 +216,7 @@ Read the conversation, then tell me what you are thinking as you say:
             user_indices = list(user_indices)
             
             # For each user message
-            for index in tqdm(user_indices, "Parsing messages", position=1):
+            for index in user_indices:
                 # Get all messages which preceded it in the batch as a string
                 s = start_index
                 if start_index == index: s -= 1
@@ -231,10 +237,13 @@ Read the conversation, then tell me what you are thinking as you say:
                     
                     # Create a context for the user's thought for the message
                     # using their relationship with the other users + conversation history
-                    thinking_context = full_context + "\n" + context_str if context_str else full_context
+                    if full_context and not context_str: thinking_context = full_context
+                    if context_str and not full_context: thinking_context = context_str
+                    if full_context and context_str:
+                        thinking_context = full_context + "\n" + context_str
                     
                     # Predict the user's thought for the message
-                    thought = self.predict_thought( conversation.iloc[indices], local_index, thinking_context, tokens=thinking_tokens)
+                    thought = self.predict_thought( conversation.iloc[indices], local_index, context=thinking_context, tokens=thinking_tokens)
                     
                     # Enclose the thought in <thinking> tags
                     output = f"<thinking>{thought}</thinking>\n\n" + output
@@ -255,6 +264,36 @@ Read the conversation, then tell me what you are thinking as you say:
                 context_str = self.understand_conversation_pov( conversation.iloc[indices], context=context_str, target_user=target_user ).topic
             
         return pd.DataFrame(data)
+    
+    def parse_conversations(self, conversations : list[pd.DataFrame], target_user : str, batch_size : int = 10, initial_context : str | None = None, use_context : bool = True, thinking_tokens : int = 0):
+        """
+        Parse all conversations from a user into a supervised text dataset.
+
+        Args:
+            conversations (list[DataFrame]): The conversations to convert.
+            target_user (str): Which user we're trying to predict the messages of.
+            batch_size (int, optional): Maximum number of new input messages per sample. Defaults to 10.
+            use_context (bool, optional): If enabled, uses LLM generation to add synthetic context to the conversation. Defaults to True.
+            initial_context (str, optional): If given, provides the context for the users' relationship.
+            thinking_tokens (int, optional): If > 0, predicts the thoughts of the target user for each message using a given number of tokens. Defaults to 0.
+        
+        Returns:
+            dataset (DataFrame): NLP dataset with columns "content" (input) and "label" (output).
+        """
+        data = []
+        
+        context_str = initial_context
+
+        for i, conversation in enumerate(tqdm(conversations)):
+            
+            items = self.conversation_to_dataset(conversation,target_user, batch_size=batch_size,initial_context=context_str,use_context=use_context,thinking_tokens=thinking_tokens)
+            data.append(items)
+            
+            if i < len(conversations) - 1 and use_context:
+                context_str = self.understand_conversation_pov(conversation, target_user=target_user, context=context_str).relationship
+        
+        data = pd.concat(data)
+        return data
 
     def reply(self, messages : pd.DataFrame, context : str | None = None) -> str:
         """
