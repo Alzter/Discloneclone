@@ -91,6 +91,8 @@ pkgs.mkShell {
             unsloth-zoo
             pillow
             protobuf
+            discordpy
+            python-dotenv
 #             scipy
 #             einops
 #             evaluate
