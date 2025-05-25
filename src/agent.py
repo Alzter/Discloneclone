@@ -2,8 +2,7 @@ import pandas as pd
 from typing import Literal
 import sys
 import parser
-sys.path.append("../src/")
-from utils import LocalPLM, LocalModelArguments
+from utils.utils import LocalPLM, LocalModelArguments
 from dataclasses import dataclass, field
 
 @dataclass
