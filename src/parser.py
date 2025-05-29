@@ -130,12 +130,18 @@ def to_string(messages : pd.DataFrame, header : bool = False, timestamp : bool =
     return string.strip()
 
 def to_dataset(messages : pd.DataFrame, target_user : str, window_size : int = 10, anonymise : bool = True, timestamp : bool = False):
+    data = {"content" : [], "label" : []}
+
     # Use a sliding window to slice the conversation up
     slices = [msgs for msgs in messages.rolling(window_size)]
 
     # Get all messages from the target user
     target_user_indices = list(messages[messages.Author == target_user].index)
     other_user_indices = list(messages[messages.Author != target_user].index)
+    
+    # If there's no messages by the user and others, return nothing
+    if not target_user_indices and not other_user_indices:
+        return pd.DataFrame(data)
 
     # Remove all messages from the target user which don't come
     # before a different user's message at the start of the conversation
@@ -144,7 +150,6 @@ def to_dataset(messages : pd.DataFrame, target_user : str, window_size : int = 1
     # Remove all slices which don't end with a message by the target user
     slices = [msgs for msgs in slices if msgs.index.stop - 1 in target_user_indices]
 
-    data = {"content" : [], "label" : []}
     
     for msgs in slices:
         inputs = msgs.iloc[:-1]
