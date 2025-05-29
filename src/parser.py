@@ -2,6 +2,8 @@ from datetime import timedelta, datetime
 import pandas as pd
 import numpy as np
 import glob
+from tqdm import tqdm
+import warnings
 
 def parse_discord_conversation(c : pd.DataFrame) -> pd.DataFrame:
     def parse_time_str(time : str) -> datetime:
@@ -27,55 +29,68 @@ def get_chat(user : str, path : str) -> pd.DataFrame:
     else:
         raise FileNotFoundError(f"No conversation(s) found at path {path}")
 
-def group_consecutive_messages(messages : pd.DataFrame, users : str | list[str] | None = None, delimiter : str = '\n') -> pd.DataFrame:
+def group_consecutive(messages : pd.DataFrame | list[pd.DataFrame], users : str | list[str] | None = None, delimiter : str = '\n') -> pd.DataFrame | list[pd.DataFrame]:
     """
     Given a Discord conversation history, combine all
     consecutive messages by the same user into single
     messages delimited with line breaks by default.
 
     Args:
-        messages (DataFrame): The conversation history to combine consecutive messages for.
+        messages (DataFrame | list[DataFrame]): The conversation(s) to combine consecutive messages for.
         users (str | list[str] | None, optional): Which users to combine messages for. Defaults to all users.
         delimiter (str, optional): What string to use when concatenating messages. Defaults to "\n".
         
     Returns:
         grouped_msgs (DataFrame): The conversation history with consecutive messages combined.
     """
-    if not users: users = messages.Author.unique()
-    if type(users) is str: users = [users]
+    # If we're dealing with a list of messages,
+    # call this function recursively.
+    if type(messages) is list:
+        msgs = []
+        for i in messages:
+            concat = group_consecutive(i,users,delimiter)
+            if len(concat) > 0: msgs.append(concat)
+        return msgs
     
-    grouped_msgs = []
-    chunk = None
-    
-    for i, message in messages.iterrows():
-        prev_msg = messages.iloc[i - 1] if i > 0 else None
-        prev_author = prev_msg.Author if prev_msg is not None else None
+    elif type(messages) is pd.DataFrame:
 
-        if chunk is not None:
-            if message.Author == prev_author:
-                chunk.Content += delimiter + message.Content
-            else:
-                grouped_msgs.append(chunk.to_dict())
-                chunk = None
+        if not users: users = messages.Author.unique()
+        if type(users) is str: users = [users]
+        
+        grouped_msgs = []
+        chunk = None
 
-        if chunk is None:
-            if message.Author in users:
-                chunk = message
-            else:
-                grouped_msgs.append(message.to_dict())
-            
-        # if message.Author == user:
-        #     if prev_msg.Author == user:
-        #         chunk.Content += delimiter + message.Content
-        #     else:
-        #         chunk = message
-        # else:
-        #     if chunk is not None:
-        #         grouped_msgs.append(chunk.to_dict())
-        #         chunk=None
-        #     grouped_msgs.append(message.to_dict())
+        for i, message in messages.iterrows():
+            prev_msg = messages.iloc[i - 1] if i > 0 else None
+            prev_author = prev_msg.Author if prev_msg is not None else None
 
-    return pd.DataFrame(grouped_msgs)
+            if chunk is not None:
+                if message.Author == prev_author:
+                    chunk.Content += delimiter + message.Content
+                else:
+                    grouped_msgs.append(chunk.to_dict())
+                    chunk = None
+
+            if chunk is None:
+                if message.Author in users:
+                    chunk = message
+                else:
+                    grouped_msgs.append(message.to_dict())
+                
+            # if message.Author == user:
+            #     if prev_msg.Author == user:
+            #         chunk.Content += delimiter + message.Content
+            #     else:
+            #         chunk = message
+            # else:
+            #     if chunk is not None:
+            #         grouped_msgs.append(chunk.to_dict())
+            #         chunk=None
+            #     grouped_msgs.append(message.to_dict())
+
+        return pd.DataFrame(grouped_msgs)
+
+    raise ValueError("Messages must be DataFrame or List")
 
 def split_by_conversations(messages : pd.DataFrame, gap_mins : int = 50, min_conv_length : int = 5) -> list[pd.DataFrame]:
     """
@@ -150,7 +165,7 @@ def get_header(messages : pd.DataFrame, target_user : str | None = None) -> str:
 
     return string
 
-def to_string(messages : pd.DataFrame, header : bool = False, timestamp : bool = True, anonymize : bool = False, target_user : str | None = None, context : str | None = None) -> str:
+def to_string(messages : pd.DataFrame, header : bool = False, timestamp : bool = True, anonymise : bool = False, target_user : str | None = None, context : str | None = None) -> str:
     """
     Convert a Discord conversation history from DataFrame into a raw string.
 
@@ -158,7 +173,7 @@ def to_string(messages : pd.DataFrame, header : bool = False, timestamp : bool =
         messages (DataFrame): The conversation.
         header (bool, optional): Whether to include metadata at the start of the string, including the users in conversation and the time of the last message. Defaults to True.
         timestamp (bool, optional): Whether to include a timestamp for each message. Defaults to True.
-        anonymize (bool, optional): Whether to replace all user names with "user", except for the target user. Defaults to False.
+        anonymise (bool, optional): Whether to replace all user names with "user", except for the target user. Defaults to False.
         target_user (str, optional): Which user to use as the focal point of the conversation. Defaults to None.
         context (str, optional): Additional context for the conversation. If provided, added after the header. Defaults to None.
     """
@@ -172,7 +187,7 @@ def to_string(messages : pd.DataFrame, header : bool = False, timestamp : bool =
     if context: string += "\nContext of the conversation:\n" + context
 
     for i, message in messages.iterrows():
-        author = message.Author if (not anonymize or message.Author.lower() == target_user) else "user"
+        author = message.Author if (not anonymise or message.Author.lower() == target_user) else "user"
         string += "\n\n" + author
         if timestamp: string += " " + message.Date.strftime("%H:%M:%S")
         string += f"\n{message.Content}"
@@ -200,8 +215,7 @@ def to_dataset(messages : pd.DataFrame | list[pd.DataFrame], target_user : str, 
     data = {"content" : [], "label" : []}
     
     # If we're dealing with a list of messages,
-    # call this function recursively to
-    # process each conversation separately.
+    # call this function recursively.
     if type(messages) is list:
 
         data = pd.DataFrame(data)
@@ -244,7 +258,7 @@ def to_dataset(messages : pd.DataFrame | list[pd.DataFrame], target_user : str, 
             output = msgs.iloc[-1]
 
             # Convert inputs/outputs to string
-            inputs = to_string(inputs, header=False, timestamp=timestamp, anonymize=anonymise, target_user=target_user)
+            inputs = to_string(inputs, header=False, timestamp=timestamp, anonymise=anonymise, target_user=target_user)
             output = output.Content
 
             data['content'].append(inputs)
@@ -252,3 +266,43 @@ def to_dataset(messages : pd.DataFrame | list[pd.DataFrame], target_user : str, 
 
         return pd.DataFrame(data)
 
+    raise ValueError("Messages must be DataFrame or List")
+
+def create_dataset(files : list[str], target_user : str, anonymise : bool = True, input_length : int = 30, packing : bool = True, timestamp : bool = False, conversation_split_mins : int | None = 120) -> pd.DataFrame:
+    """
+    Convert a list of Discord conversations into a supervised Q&A dataset from the perspective of a given user.
+    This dataset can then be used to fine-tune a PLM to impersonate the user.
+
+    Args:
+        files (list[str]): List of Discord conversation history CSV files exported with DiscordChatExporter.
+        target_user (str): Which user to predict the messages for.
+        anonymise (bool, optional): Replaces usernames of all other users with "user".
+                                    Enable if you want the LLM to act uniformly for all users. Defaults to True.
+        input_length (int, optional): For each sample, how many messages to include before the target user's message for context.
+                                      Greater values allow the LLM to infer more context from each conversation. Defaults to 30.
+        packing (bool, optional): Concatenates all consecutive messages by the target user using line breaks to reduce dataset size.
+                                  If enabled, dataset will be smaller but LLM responses will be larger. Defaults to True.
+        timestamp (bool, optional): Includes a timestamp within each input message in the dataset. Defaults to False.
+        conversation_split_mins (int | None, optional): If given, slices each message history into separated conversations where the time between
+                                                        each conversation in minutes is greater than the given amount. Defaults to 120.
+    
+    Returns:
+        dataset (DataFrame): A Q&A dataset made out of the Discord conversations. Has two columns, "content" (inputs) and "labels" (output message).
+    """
+    data = pd.DataFrame({"content": [], "label": []})
+    
+    for file in tqdm(files, "Preprocessing Discord Conversations"):
+
+        try:
+            chat = parse_discord_conversation_csv(file)
+            if conversation_split_mins: chat = split_by_conversations(chat, conversation_split_mins)
+            if packing: chat = group_consecutive(chat, target_user)
+            chat = to_dataset(chat, target_user, input_length, ignore_repeats=packing, anonymise=anonymise, timestamp=timestamp)
+            data = pd.concat([data, chat])
+
+        except Exception as e:
+            warnings.warn(f"Error reading Discord conversation history file at path {file}. Traceback: {str(e)}. Ignoring the file and proceeding.")
+        
+    data = data.reset_index(drop=True)
+
+    return data
