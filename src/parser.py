@@ -100,19 +100,62 @@ def get_header(messages : pd.DataFrame, target_user : str | None = None) -> str:
 
     return string
 
-def to_string(messages : pd.DataFrame, context : str | None = None, header : bool = True, target_user : str | None = None) -> str:
+def to_string(messages : pd.DataFrame, header : bool = False, timestamp : bool = True, anonymize : bool = False, target_user : str | None = None, context : str | None = None) -> str:
     """
     Convert a Discord conversation history from DataFrame into a raw string.
+
+    Args:
+        messages (DataFrame): The conversation.
+        header (bool, optional): Whether to include metadata at the start of the string, including the users in conversation and the time of the last message. Defaults to True.
+        timestamp (bool, optional): Whether to include a timestamp for each message. Defaults to True.
+        anonymize (bool, optional): Whether to replace all user names with "user", except for the target user. Defaults to False.
+        target_user (str, optional): Which user to use as the focal point of the conversation. Defaults to None.
+        context (str, optional): Additional context for the conversation. If provided, added after the header. Defaults to None.
     """
     string = ""
 
     if header:
         string += get_header(messages, target_user=target_user)
 
+    if type(target_user) is str: target_user = target_user.lower()
+
     if context: string += "\nContext of the conversation:\n" + context
 
     for i, message in messages.iterrows():
-        string += f"\n\n{message.Author} {message.Date.strftime("%H:%M:%S")}"
+        author = message.Author if (not anonymize or message.Author.lower() == target_user) else "user"
+        string += "\n\n" + author
+        if timestamp: string += " " + message.Date.strftime("%H:%M:%S")
         string += f"\n{message.Content}"
 
     return string.strip()
+
+def to_dataset(messages : pd.DataFrame, target_user : str, window_size : int = 10, anonymise : bool = True, timestamp : bool = False):
+    # Use a sliding window to slice the conversation up
+    slices = [msgs for msgs in messages.rolling(window_size)]
+
+    # Get all messages from the target user
+    target_user_indices = list(messages[messages.Author == target_user].index)
+    other_user_indices = list(messages[messages.Author != target_user].index)
+
+    # Remove all messages from the target user which don't come
+    # before a different user's message at the start of the conversation
+    target_user_indices = [i for i in target_user_indices if i > other_user_indices[0]]
+
+    # Remove all slices which don't end with a message by the target user
+    slices = [msgs for msgs in slices if msgs.index.stop - 1 in target_user_indices]
+
+    data = {"content" : [], "label" : []}
+    
+    for msgs in slices:
+        inputs = msgs.iloc[:-1]
+        output = msgs.iloc[-1]
+
+        # Convert inputs/outputs to string
+        inputs = to_string(inputs, header=False, timestamp=timestamp, anonymize=anonymise, target_user=target_user)
+        output = output.Content
+
+        data['content'].append(inputs)
+        data['label'].append(output)
+
+    return pd.DataFrame(data)
+
