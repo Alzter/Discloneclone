@@ -27,7 +27,57 @@ def get_chat(user : str, path : str) -> pd.DataFrame:
     else:
         raise FileNotFoundError(f"No conversation(s) found at path {path}")
 
-def split_by_conversations(messages : pd.DataFrame, gap_mins : 50, min_conv_length : int = 5) -> list[pd.DataFrame]:
+def group_consecutive_messages(messages : pd.DataFrame, users : str | list[str] | None = None, delimiter : str = '\n') -> pd.DataFrame:
+    """
+    Given a Discord conversation history, combine all
+    consecutive messages by the same user into single
+    messages delimited with line breaks by default.
+
+    Args:
+        messages (DataFrame): The conversation history to combine consecutive messages for.
+        users (str | list[str] | None, optional): Which users to combine messages for. Defaults to all users.
+        delimiter (str, optional): What string to use when concatenating messages. Defaults to "\n".
+        
+    Returns:
+        grouped_msgs (DataFrame): The conversation history with consecutive messages combined.
+    """
+    if not users: users = messages.Author.unique()
+    if type(users) is str: users = [users]
+    
+    grouped_msgs = []
+    chunk = None
+    
+    for i, message in messages.iterrows():
+        prev_msg = messages.iloc[i - 1] if i > 0 else None
+        prev_author = prev_msg.Author if prev_msg is not None else None
+
+        if chunk is not None:
+            if message.Author == prev_author:
+                chunk.Content += delimiter + message.Content
+            else:
+                grouped_msgs.append(chunk.to_dict())
+                chunk = None
+
+        if chunk is None:
+            if message.Author in users:
+                chunk = message
+            else:
+                grouped_msgs.append(message.to_dict())
+            
+        # if message.Author == user:
+        #     if prev_msg.Author == user:
+        #         chunk.Content += delimiter + message.Content
+        #     else:
+        #         chunk = message
+        # else:
+        #     if chunk is not None:
+        #         grouped_msgs.append(chunk.to_dict())
+        #         chunk=None
+        #     grouped_msgs.append(message.to_dict())
+
+    return pd.DataFrame(grouped_msgs)
+
+def split_by_conversations(messages : pd.DataFrame, gap_mins : int = 50, min_conv_length : int = 5) -> list[pd.DataFrame]:
     """
     Split a Discord conversation history into a list of shorter conversations separated by gap_mins minutes.
 
@@ -129,38 +179,76 @@ def to_string(messages : pd.DataFrame, header : bool = False, timestamp : bool =
 
     return string.strip()
 
-def to_dataset(messages : pd.DataFrame, target_user : str, window_size : int = 10, anonymise : bool = True, timestamp : bool = False):
+def to_dataset(messages : pd.DataFrame | list[pd.DataFrame], target_user : str, context_length : int = 10, anonymise : bool = True, timestamp : bool = False, ignore_repeats : bool = False) -> pd.DataFrame:
+    """
+    Convert a Discord conversation or list of conversations into a supervised Q&A dataset from the perspective of a given user.
+    This dataset can then be used to fine-tune a PLM to impersonate the user.
+
+    A sliding window method is used to slice the data so that each input has no more than ``context_length messages``.
+
+    Args:
+        messages (DataFrame | list[DataFrame]): Discord message history / conversations to parse.
+        target_user (str): Which user you want to predict the messages of.
+        context_length (int, optional): Maximum number of input messages per data sample. Defaults to 10.
+        anonymise (bool, optional): Replaces the usernames of all other users with "user". Defaults to True.
+        timestamp (bool, optional): Adds a timestamp at the start of each message. Defaults to False.
+        ignore_repeats (bool, optional): Ignores all messages from the target user sent after a message from the same user.
+        
+    Returns:
+        dataset (DataFrame): A Q&A dataset made out of the Discord conversations. Has two columns, "content" (inputs) and "labels" (output message).
+    """
     data = {"content" : [], "label" : []}
-
-    # Use a sliding window to slice the conversation up
-    slices = [msgs for msgs in messages.rolling(window_size)]
-
-    # Get all messages from the target user
-    target_user_indices = list(messages[messages.Author == target_user].index)
-    other_user_indices = list(messages[messages.Author != target_user].index)
     
-    # If there's no messages by the user and others, return nothing
-    if not target_user_indices and not other_user_indices:
+    # If we're dealing with a list of messages,
+    # call this function recursively to
+    # process each conversation separately.
+    if type(messages) is list:
+
+        data = pd.DataFrame(data)
+        for message in messages:
+            
+            # Process the messages sequentially
+            message_data = to_dataset(message, target_user, context_length, anonymise, timestamp, ignore_repeats)
+
+            # Append each message data to the end of the dict
+            data = pd.concat([data, message_data])
+        
+        data = data.reset_index(drop=True)
+        return data
+
+    elif type(messages) is pd.DataFrame:
+
+        # Get all messages from the target user
+        target_user_indices = list(messages[messages.Author == target_user].index)
+        other_user_indices = list(messages[messages.Author != target_user].index)
+        
+        # If there's no messages by the user and others, return nothing
+        if not target_user_indices or not other_user_indices:
+            return pd.DataFrame(data)
+
+        # Remove all messages from target user which aren't preceded by
+        # a different user's message at the start of the conversation.
+        target_user_indices = [i for i in target_user_indices if i > other_user_indices[0]]
+
+        # Remove all messages from target user which
+        # aren't preceded by a different user.
+        if ignore_repeats:
+            target_user_indices = [index for i, index in enumerate(target_user_indices) if index - target_user_indices[i-1] > 1 or i == 0]
+
+        # Use a sliding window to slice the conversation up.
+        for msgs in messages.rolling(context_length):
+            # Ignore all slices which don't end with a message by the target user
+            if msgs.index.stop - 1 not in target_user_indices: continue
+        
+            inputs = msgs.iloc[:-1]
+            output = msgs.iloc[-1]
+
+            # Convert inputs/outputs to string
+            inputs = to_string(inputs, header=False, timestamp=timestamp, anonymize=anonymise, target_user=target_user)
+            output = output.Content
+
+            data['content'].append(inputs)
+            data['label'].append(output)
+
         return pd.DataFrame(data)
-
-    # Remove all messages from the target user which don't come
-    # before a different user's message at the start of the conversation
-    target_user_indices = [i for i in target_user_indices if i > other_user_indices[0]]
-
-    # Remove all slices which don't end with a message by the target user
-    slices = [msgs for msgs in slices if msgs.index.stop - 1 in target_user_indices]
-
-    
-    for msgs in slices:
-        inputs = msgs.iloc[:-1]
-        output = msgs.iloc[-1]
-
-        # Convert inputs/outputs to string
-        inputs = to_string(inputs, header=False, timestamp=timestamp, anonymize=anonymise, target_user=target_user)
-        output = output.Content
-
-        data['content'].append(inputs)
-        data['label'].append(output)
-
-    return pd.DataFrame(data)
 
