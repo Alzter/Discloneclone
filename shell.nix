@@ -15,6 +15,7 @@ let
                             passthru = torch-binPrevAttrs.passthru // {
                               cudaPackages = pkgs.cudaPackages;
                               cudaSupport = true;
+                              cudaCapabilities = ["7.5"];
                             };
                           });
                           torchvision = final_.torchvision-bin;
