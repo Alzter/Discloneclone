@@ -255,11 +255,11 @@ def to_dataset(messages : pd.DataFrame | list[pd.DataFrame], target_user : str, 
             if msgs.index.stop - 1 not in target_user_indices: continue
         
             inputs = msgs.iloc[:-1]
-            output = msgs.iloc[-1]
+            output = msgs.iloc[[-1]]
 
             # Convert inputs/outputs to string
             inputs = to_string(inputs, header=False, timestamp=timestamp, anonymise=anonymise, target_user=target_user)
-            output = output.Content
+            output = to_string(output, header=False, timestamp=timestamp, anonymise=anonymise, target_user=target_user)
 
             data['content'].append(inputs)
             data['label'].append(output)
@@ -268,7 +268,7 @@ def to_dataset(messages : pd.DataFrame | list[pd.DataFrame], target_user : str, 
 
     raise ValueError("Messages must be DataFrame or List")
 
-def create_dataset(files : list[str], target_user : str, anonymise : bool = True, input_length : int = 30, packing : bool = True, timestamp : bool = False, conversation_split_mins : int | None = 120) -> pd.DataFrame:
+def create_dataset(files : str | list[str], target_user : str, anonymise : bool = True, input_length : int = 30, packing : bool = True, timestamp : bool = False, conversation_split_mins : int | None = 120) -> pd.DataFrame:
     """
     Convert a list of Discord conversations into a supervised Q&A dataset from the perspective of a given user.
     This dataset can then be used to fine-tune a PLM to impersonate the user.
@@ -289,6 +289,9 @@ def create_dataset(files : list[str], target_user : str, anonymise : bool = True
     Returns:
         dataset (DataFrame): A Q&A dataset made out of the Discord conversations. Has two columns, "content" (inputs) and "labels" (output message).
     """
+
+    if type(files) is str: files = [files]
+
     data = pd.DataFrame({"content": [], "label": []})
     
     for file in tqdm(files, "Preprocessing Discord Conversations"):
