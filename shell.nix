@@ -21,10 +21,6 @@ let
                           torchvision = final_.torchvision-bin;
                           torchaudio = final_.torchaudio-bin;
                           trl = final_.callPackage ./build/trl/default.nix { };
-                          unsloth = final_.callPackage ./build/unsloth/default.nix { };
-                          unsloth-zoo = final_.callPackage ./build/unsloth-zoo/default.nix { };
-                          tyro = final_.callPackage ./build/tyro/default.nix { };
-                          cut-cross-entropy = final_.callPackage ./build/cut-cross-entropy/default.nix { };
                           sklearn-compat = final_.buildPythonPackage rec { # Use pre-compiled version of sklearn-compat
                             pname = "sklearn_compat";
                             version = "0.1.3";
@@ -38,18 +34,28 @@ let
                             };
 
                             propagatedBuildInputs = with final_; [ scikit-learn ];
-#                             doCheck = false;
+                            doCheck = false;
                           };
                           imbalanced-learn = prev_.imbalanced-learn.overridePythonAttrs(imbalPrevAttrs: {
                             dependencies = imbalPrevAttrs.dependencies ++ [ final_.sklearn-compat ];
                             doCheck = false;
                           });
-                          # cut-cross-entropy = prev_.cut-cross-entropy.overrideAttrs(cutFinalAttrs: cutPrevAttrs: {
-                          #   triton = final_.torch-bin.triton;
-                            # pythonRemoveDeps = [
-                            #   "triton" # PyTorch has its own Triton
-                            # ];
-                          # });
+                          cut-cross-entropy = prev_.cut-cross-entropy.overridePythonAttrs(prevAttrs: {
+                            dependencies = pkgs.lib.filter (dep: dep != final_.triton) prevAttrs.dependencies;
+                            doCheck = false;
+                          });
+                          tyro = prev_.tyro.overridePythonAttrs(prevAttrs: {
+                            dependencies = pkgs.lib.filter (dep: dep != final_.triton) prevAttrs.dependencies;
+                            doCheck = false;
+                          });
+                          unsloth = prev_.unsloth.overridePythonAttrs(prevAttrs: {
+                            dependencies = pkgs.lib.filter (dep: dep != final_.triton) prevAttrs.dependencies;
+                            doCheck = false;
+                          });
+                          unsloth-zoo = prev_.unsloth-zoo.overridePythonAttrs(prevAttrs: {
+                            dependencies = pkgs.lib.filter (dep: dep != final_.triton) prevAttrs.dependencies ++ [final_.pillow final_.protobuf];
+                            doCheck = false;
+                          });
                        };
                     };
                 }
