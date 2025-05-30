@@ -34,7 +34,9 @@ cd discloneclone
     ```
 # Usage
 
-1. Preprocess all CSV files in a directory into one dataset:
+1. Export your Discord chat logs as a CSV using [DiscordChatExporter](https://github.com/Tyrrrz/DiscordChatExporter).
+
+2. Preprocess all CSV files in a directory into one dataset:
 ```python
 import parser
 from glob import glob
@@ -43,7 +45,7 @@ dataset = parser.create_dataset(chats, "your-username") # Create training datase
 dataset.to_csv("data_combined.csv", index=False) # Export to CSV file
 ```
 
-2. Fine-tune an LLM on the data locally
+3. Fine-tune an LLM on the data locally
 ```bash
 python src/utils/run_finetune.py finetune_args.json
 ```
@@ -90,7 +92,7 @@ python src/utils/run_finetune.py finetune_args.json
   ```
 </details>
 
-3. Run a Discord bot using the fine-tuned LLM
+4. Run a Discord bot using the fine-tuned LLM
 
 ```bash
 python src/main.py
