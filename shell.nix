@@ -63,6 +63,7 @@ pkgs.mkShell {
         tmux
         lunarvim
         gh
+        pipreqs
         (python312.withPackages (p: with p; [
             ipykernel
             jupyter
@@ -94,6 +95,7 @@ pkgs.mkShell {
             protobuf
             discordpy
             python-dotenv
+            pip-tools
 #             scipy
 #             einops
 #             evaluate

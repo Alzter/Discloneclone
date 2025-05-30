@@ -1,0 +1,14 @@
+datasets==3.6.0
+discord.py==2.5.2
+litellm==1.71.2
+matplotlib==3.10.3
+numpy==2.2.6
+packaging==25.0
+pandas==2.2.3
+peft==0.15.2
+python-dotenv==1.1.0
+scikit_learn==1.6.1
+torch==2.7.0
+tqdm==4.67.1
+transformers==4.52.3
+unsloth
