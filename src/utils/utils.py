@@ -14,6 +14,7 @@ from pandas import DataFrame
 from matplotlib import pyplot as plt
 import time
 
+import unsloth
 import torch
 import transformers
 from datasets import Dataset
