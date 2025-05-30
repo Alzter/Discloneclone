@@ -98,3 +98,9 @@ python src/utils/run_finetune.py finetune_args.json
 ```bash
 python src/main.py
 ```
+
+# Documentation
+- All code is documented with in-line DocStrings.
+
+# Credits
+- FlintSH for the original Disclone, of which this project is inspired by
