@@ -89,3 +89,9 @@ python src/utils/run_finetune.py finetune_args.json
   }
   ```
 </details>
+
+3. Run a Discord bot using the fine-tuned LLM
+
+```bash
+python src/main.py
+```
