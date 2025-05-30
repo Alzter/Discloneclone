@@ -1,12 +1,13 @@
 # Discloneclone - Fine-tune LLMs locally on your Discord chat history
 Discloneclone is a clone of [Disclone](https://github.com/FlintSH/Disclone) (by FlintSH) that allows
-you to create a _clone of yourself_ (or someone else) by fine-tuning an LLM on Discord chat history using your own hardware.
+you to create a _clone of yourself_ (or someone else) by fine-tuning an LLM on Discord chat history using your own hardware. It also allows you to run a Discord bot that uses the fine-tuned LLM to respond to incoming messages (WIP).
 
 # What it does
 Discloneclone can:
 1. Process one or multiple CSV files exported from Discord using [DiscordChatExporter](https://github.com/Tyrrrz/DiscordChatExporter).
 2. Create training data from the chat logs, focusing on a specific user.
 3. Fine-tune any LLM using the training data on your **local hardware** using [transformers](https://github.com/huggingface/transformers), [trl](https://github.com/huggingface/trl), [peft](https://github.com/huggingface/peft), and [unsloth](https://github.com/unslothai/unsloth).
+4. Run a Discord Bot using the fine-tuned LLM to pretend to be you. (WIP)
 
 # Prerequisites
 - Python
