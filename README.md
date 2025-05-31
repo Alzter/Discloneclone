@@ -39,11 +39,12 @@ cd discloneclone
 
 2. Preprocess all CSV files in a directory into one dataset:
 ```python
+import json
 import parser
 from glob import glob
 chats = glob("discord-chat-folder/*.csv") # Obtain all chat logs in folder
 dataset = parser.create_dataset(chats, "your-username") # Create training dataset from chat logs
-dataset.to_csv("data_combined.csv", index=False) # Export to CSV file
+json.dump(dataset, "data_combined.json") # Export to JSON file
 ```
 
 3. Fine-tune an LLM on the data locally
@@ -56,7 +57,7 @@ python src/utils/run_finetune.py finetune_args.json
   
   ```json
   {
-    "dataset" : "data_combined.csv",
+    "dataset" : "data_combined.json",
     "test_size" : 0,
     "ratio" : 1,
     "text_columns" : "content",
