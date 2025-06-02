@@ -331,9 +331,16 @@ def to_dataset(messages : pd.DataFrame | list[pd.DataFrame], target_user : str, 
         for msgs in messages.rolling(context_length):
             # Ignore all slices which don't end with a message by the target user
             if msgs.index.stop - 1 not in target_user_indices: continue
-             
+            
+            # Remove any target user messages which aren't preceded by another user's message. 
+            other_user_subindices = msgs[msgs.Author != target_user].index
+            if len(other_user_subindices) == 0: continue
+            other_user_first_msg_index = other_user_subindices[0]
+            chat = msgs.iloc[other_user_first_msg_index:]
+            if len(chat) == 0: continue
+
             # Convert inputs/outputs to string
-            chat = to_chat_template(msgs, system_prompt=system_prompt, target_user=target_user, usernames=usernames, timestamps=timestamps)
+            chat = to_chat_template(chat, system_prompt=system_prompt, target_user=target_user, usernames=usernames, timestamps=timestamps)
             
             data.append(chat)
         
