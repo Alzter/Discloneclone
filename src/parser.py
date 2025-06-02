@@ -233,7 +233,7 @@ def to_chat_template(messages : pd.DataFrame, target_user : str, system_prompt :
     system_prompts = [system_prompt]
 
     metadata = []
-    if usernames: metadata.append("username")
+    if usernames or True: metadata.append("username")
     if timestamps: metadata.append("timestamp")
     metadata = " ".join(metadata)
     if metadata:
@@ -250,7 +250,10 @@ def to_chat_template(messages : pd.DataFrame, target_user : str, system_prompt :
         # Add message user and timestamps if needed
         content = ""
         metadata = []
-        if usernames: metadata.append(message.Author)
+
+        author = message.Author if message.Author == target_user else "user"
+
+        if usernames: metadata.append(author)
         if timestamps: metadata.append(message.Date.strftime("%H:%M:%S"))
         
         if metadata:
@@ -332,11 +335,12 @@ def to_dataset(messages : pd.DataFrame | list[pd.DataFrame], target_user : str, 
             # Ignore all slices which don't end with a message by the target user
             if msgs.index.stop - 1 not in target_user_indices: continue
             
+            chat = msgs.reset_index(drop=True)
             # Remove any target user messages which aren't preceded by another user's message. 
-            other_user_subindices = msgs[msgs.Author != target_user].index
+            other_user_subindices = chat[chat.Author != target_user].index
             if len(other_user_subindices) == 0: continue
             other_user_first_msg_index = other_user_subindices[0]
-            chat = msgs.iloc[other_user_first_msg_index:]
+            chat = chat.iloc[other_user_first_msg_index:]
             if len(chat) == 0: continue
 
             # Convert inputs/outputs to string
