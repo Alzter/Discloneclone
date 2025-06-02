@@ -44,7 +44,8 @@ import parser
 from glob import glob
 chats = glob("discord-chat-folder/*.csv") # Obtain all chat logs in folder
 dataset = parser.create_dataset(chats, "your-username") # Create training dataset from chat logs
-json.dump(dataset, "data_combined.json") # Export to JSON file
+with open("data_combined.json", "w") as f:
+    json.dump(data, f, indent=2) # Export to JSON file
 ```
 
 3. Fine-tune an LLM on the data locally
