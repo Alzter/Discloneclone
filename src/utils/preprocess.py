@@ -523,8 +523,8 @@ def preprocess_dataset(dataset : Dataset | DatasetDict, text_columns : str | lis
 
 def load_dataset(
         dataset_name_or_path : str,
-        text_columns : str | list[str],
-        label_columns : str | list[str],
+        text_columns : str | list[str] | None = None,
+        label_columns : str | list[str] | None = None,
         test_size : float = 0,
         balanced : bool = False,
         ratio : float | None = None,
@@ -535,8 +535,8 @@ def load_dataset(
 
     Args:
         dataset_name_or_path (str): Accepts the name of a dataset from the HuggingFace Hub or the path of a CSV file to load.
-        text_columns (str | list[str]): Which column(s) to use from the dataset as input text (X).
-        label_columns (str | list[str]): Which column(s) to use from the dataset as output labels (y).
+        text_columns (str | list[str], optional): Which column(s) to use from the dataset as input text (X). Defaults to None.
+        label_columns (str | list[str], optional): Which column(s) to use from the dataset as output labels (y). Defaults to None.
         test_size (float, optional): If given, splits the dataset into train/test subsets using test_size as the test ratio. Defaults to 0.
         balanced (bool, optional): Whether to perform stratified undersampling on the dataset to get equal class distributions. Defaults to False.
         ratio (float, optional): Fraction of the dataset to sample randomly ∈ (0, 1]. Cannot be used with ``size``. Defaults to None.
@@ -552,6 +552,24 @@ def load_dataset(
         if type(dataset) is Dataset:
             if test_size: dataset = dataset.train_test_split(test_size = test_size)
     except Exception: dataset = None
+     
+    # Attempt to load Dataset from JSON file
+    if dataset_name_or_path.endswith(".json") and os.path.isfile(dataset_name_or_path):
+        try:
+            dataset = hf_load_dataset("json", data_files=dataset_name_or_path)
+            if type(dataset) is DatasetDict: dataset = dataset['train']
+
+            if test_size: # If test_size is not None and is > 0
+                dataset = dataset.train_test_split(test_size=test_size)
+
+            return None, dataset 
+
+        except Exception as e:
+            warnings.warn(f"Error loading dataset {dataset_name_or_path} as JSON. Traceback: {str(e)}")
+            dataset = None
+    
+    if not text_columns or not label_columns:
+        raise ValueError("Text column(s) and label column(s) must be provided if loading a text classification dataset.")   
     
     # Attempt to load Dataset from a CSV file
     if dataset_name_or_path.endswith(".csv") and os.path.isfile(dataset_name_or_path):
@@ -561,10 +579,10 @@ def load_dataset(
             raise Exception(f"Error reading CSV dataset at {dataset_name_or_path}. Error message: {str(e)}")
         
         dataset = create_dataset_from_dataframe(dataset, text_columns=text_columns, label_columns=label_columns, test_size=test_size)
-    
+        
     if dataset is None:
         raise Exception(f"Dataset {dataset_name_or_path} does not point to a Dataset on the HuggingFace hub or a CSV file.")
-     
+
     if ratio or size:
         if ratio:
             if ratio > 1 or ratio <= 0: raise ValueError("Dataset sampling ratio must be > 0 and <= 1.")
