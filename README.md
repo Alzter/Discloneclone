@@ -61,8 +61,6 @@ python src/utils/run_finetune.py finetune_args.json
     "dataset" : "data_combined.json",
     "test_size" : 0,
     "ratio" : 1,
-    "text_columns" : "content",
-    "label_columns" : "label",
     "model_name_or_path" : "microsoft/Phi-4-mini-instruct",
     "cuda_devices" : "0",
     "use_unsloth" : true,
