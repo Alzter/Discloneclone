@@ -12,6 +12,7 @@ from datasets import DatasetDict
 def main(local_model_args : LocalModelArguments, data_args : DatasetArguments, training_args : SFTConfig):
     from transformers import set_seed
     from trl import SFTTrainer
+    import utils
     from utils import LocalPLM
     
     if not local_model_args.model_name_or_path:
@@ -20,12 +21,12 @@ def main(local_model_args : LocalModelArguments, data_args : DatasetArguments, t
     # Set seed for reproducibility
     set_seed(training_args.seed)
 
-    # Load training/evaluation dataset
-    import datasets
-    dataset = datasets.load_dataset("json", data_files=data_args.dataset) 
-    if type(dataset) is DatasetDict: dataset = dataset['train']
-    if data_args.test_size:
-        dataset = dataset.train_test_split(data_args.test_size)
+
+    # import datasets
+    # dataset = datasets.load_dataset("json", data_files=data_args.dataset) 
+    # if type(dataset) is DatasetDict: dataset = dataset['train']
+    # if data_args.test_size:
+    #     dataset = dataset.train_test_split(data_args.test_size)
     
     # import preprocess as pre
     # dataset, label_names = pre.load_dataset(
@@ -54,6 +55,9 @@ def main(local_model_args : LocalModelArguments, data_args : DatasetArguments, t
     
     # model
     model = LocalPLM(local_model_args, training_args=training_args)
+    
+    # Load training/evaluation dataset
+    dataset = utils.create_datasets(model.tokenizer, data_args)
     
     import subprocess
     subprocess.run(["nvidia-smi"])
