@@ -1,3 +1,4 @@
+import unsloth
 import os
 import warnings
 from abc import ABC, abstractmethod
@@ -14,7 +15,6 @@ from pandas import DataFrame
 from matplotlib import pyplot as plt
 import time
 
-import unsloth
 import torch
 import transformers
 from datasets import Dataset
@@ -631,14 +631,8 @@ class CloudPLM(PretrainedLM):
 @dataclass
 class DatasetArguments:
     dataset : str = field(
-		metadata = {"help" : 'Which dataset to use. Can be a dataset from the HuggingFace Hub or the path of a CSV file to load.'}
+		metadata = {"help" : 'Path of JSON dataset file to load.'}
 	)
-    text_columns : str = field(
-		metadata = {"help" : 'Which column(s) to use from the dataset as input text (X).'}
-	)
-    label_columns : str = field(
-		metadata = {"help" : 'Which column(s) to use from the dataset as output labels (y).'}
-    )
     test_size : float = field(
         default = 0,
         metadata = {"help" : "What percentage ratio of the dataset should be reserved for testing."}

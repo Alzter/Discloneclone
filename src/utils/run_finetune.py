@@ -1,6 +1,7 @@
 import os
 import sys
 
+import unsloth
 from transformers import HfArgumentParser
 from trl import SFTConfig
 from utils import LocalModelArguments, DatasetArguments
@@ -20,15 +21,21 @@ def main(local_model_args : LocalModelArguments, data_args : DatasetArguments, t
     set_seed(training_args.seed)
 
     # Load training/evaluation dataset
-    import preprocess as pre
-    dataset, label_names = pre.load_dataset(
-        data_args.dataset,
-        data_args.text_columns,
-        data_args.label_columns,
-        test_size = data_args.test_size,
-        ratio = data_args.ratio,
-        size = data_args.size
-    )
+    import datasets
+    dataset = datasets.load_dataset("json", data_files=data_args.dataset) 
+    if type(dataset) is DatasetDict: dataset = dataset['train']
+    if data_args.test_size:
+        dataset = dataset.train_test_split(data_args.test_size)
+    
+    # import preprocess as pre
+    # dataset, label_names = pre.load_dataset(
+    #     data_args.dataset,
+    #     data_args.text_columns,
+    #     data_args.label_columns,
+    #     test_size = data_args.test_size,
+    #     ratio = data_args.ratio,
+    #     size = data_args.size
+    # )
 
     # train_dataset, eval_dataset = dataset['train'], dataset['test']
 
