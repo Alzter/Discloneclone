@@ -1,4 +1,3 @@
-# import unsloth
 import os
 import warnings
 from abc import ABC, abstractmethod
@@ -17,8 +16,7 @@ import time
 
 import torch
 import transformers
-from datasets import Dataset, DatasetDict, load_dataset, load_from_disk
-from datasets.builder import DatasetGenerationError
+from datasets import Dataset
 from transformers import (
     AutoModelForCausalLM,
     AutoTokenizer,
@@ -477,10 +475,7 @@ class LocalPLM(PretrainedLM):
             peft_config=lora_config
         )
     
-        trainer.train(
-            resume_from_checkpoint=checkpoint,
-            formatting_func = None,
-        )
+        trainer.train(resume_from_checkpoint=checkpoint)
     
         if trainer.is_fsdp_enabled:
             trainer.accelerator.state.fsdp_plugin.set_state_dict_type("FULL_STATE_DICT")
@@ -641,26 +636,36 @@ class DatasetArguments:
         default = 0,
         metadata = {"help" : "What percentage ratio of the dataset should be reserved for testing."}
     )
-    ratio : Optional[float] = field(
-        default = None,
-        metadata = {"help" : "Fraction of the dataset to sample randomly ∈ (0, 1]. Cannot be used with size."}
+    num_shards : int = field(
+        default=0
     )
-    size : Optional[int] = field(
-        default = None,
-        metadata = {"help" : "Number of items to sample randomly from the dataset. Cannot be used with ratio."}
+    shard_index : int = field(
+        default=0
     )
-    append_concat_token: Optional[bool] = field(
-        default=False,
-        metadata={"help": "If True, appends `eos_token_id` at the end of each sample being packed."},
-    )
-    add_special_tokens: Optional[bool] = field(
-        default=False,
-        metadata={"help": "If True, tokenizers adds special tokens to each sample being packed."},
-    )
-    splits: Optional[str] = field(
-        default="train,test",
-        metadata={"help": "Comma separate list of the splits to use from the dataset."},
-    )
+    # ratio : Optional[float] = field(
+    #     default = None,
+    #     metadata = {"help" : "Fraction of the dataset to sample randomly ∈ (0, 1]. Cannot be used with size."}
+    # )
+    # size : Optional[int] = field(
+    #     default = None,
+    #     metadata = {"help" : "Number of items to sample randomly from the dataset. Cannot be used with ratio."}
+    # )
+    # dataset_name: Optional[str] = field(
+    #     default="timdettmers/openassistant-guanaco",
+    #     metadata={"help": "The preference dataset to use."},
+    # )
+    # append_concat_token: Optional[bool] = field(
+    #     default=False,
+    #     metadata={"help": "If True, appends `eos_token_id` at the end of each sample being packed."},
+    # )
+    # add_special_tokens: Optional[bool] = field(
+    #     default=False,
+    #     metadata={"help": "If True, tokenizers adds special tokens to each sample being packed."},
+    # )
+    # splits: Optional[str] = field(
+    #     default="train,test",
+    #     metadata={"help": "Comma separate list of the splits to use from the dataset."},
+    # )
 
 class ZephyrSpecialTokens(str, Enum):
     user = "<|user|>"
@@ -688,48 +693,57 @@ class ChatmlSpecialTokens(str, Enum):
         return [c.value for c in cls]
 
 
-def create_datasets(tokenizer, data_args, apply_chat_template=False):
-    def preprocess(samples):
-        batch = []
-        for conversation in samples["messages"]:
-            batch.append(tokenizer.apply_chat_template(conversation, tokenize=False))
-        return {"content": batch}
+# def create_datasets(tokenizer, data_args, training_args, apply_chat_template=False):
+#     def preprocess(samples):
+#         batch = []
+#         for conversation in samples["messages"]:
+#             batch.append(tokenizer.apply_chat_template(conversation, tokenize=False))
+#         return {"content": batch}
+# 
+#     raw_datasets = DatasetDict()
+#     for split in data_args.splits.split(","):
+#         try:
+#             # Try first if dataset on a Hub repo
+#             dataset = load_dataset(data_args.dataset_name, split=split)
+#         except DatasetGenerationError:
+#             # If not, check local dataset
+#             dataset = load_from_disk(os.path.join(data_args.dataset_name, split))
+# 
+#         if "train" in split:
+#             raw_datasets["train"] = dataset
+#         elif "test" in split:
+#             raw_datasets["test"] = dataset
+#         else:
+#             raise ValueError(f"Split type {split} not recognized as one of test or train.")
+# 
+#     if apply_chat_template:
+#         raw_datasets = raw_datasets.map(
+#             preprocess,
+#             batched=True,
+#             remove_columns=raw_datasets["train"].column_names,
+#         )
+# 
+#     train_data = raw_datasets["train"]
+#     valid_data = raw_datasets["test"]
+#     print(f"Size of the train set: {len(train_data)}. Size of the validation set: {len(valid_data)}")
+#     print(f"A sample of train dataset: {train_data[0]}")
+# 
+#     return train_data, valid_data
 
-    raw_datasets = DatasetDict()
-    for split in data_args.splits.split(","):
-        # If not, check local dataset
-        dataset = load_dataset("json", data_files=data_args.dataset, split=split)
-        #dataset = load_from_disk(os.path.join(data_args.dataset, split))
-
-        if "train" in split:
-            raw_datasets["train"] = dataset
-        elif "test" in split:
-            raw_datasets["test"] = dataset
-        else:
-            raise ValueError(f"Split type {split} not recognized as one of test or train.")
-
-    if apply_chat_template:
-        raw_datasets = raw_datasets.map(
-            preprocess,
-            batched=True,
-            remove_columns=raw_datasets["train"].column_names,
-        )
-
-    return raw_datasets["train"] 
 
 # def create_and_prepare_model(args : LocalModelArguments):#, training_args):
-#     if args.use_unsloth:
-#         from unsloth import FastLanguageModel
+#     # if args.use_unsloth:
+#     #     from unsloth import FastLanguageModel
 #     bnb_config = None
 #     quant_storage_dtype = None
 
-#     if (
-#         torch.distributed.is_available()
-#         and torch.distributed.is_initialized()
-#         and torch.distributed.get_world_size() > 1
-#         and args.use_unsloth
-#     ):
-#         raise NotImplementedError("Unsloth is not supported in distributed training")
+#     # if (
+#     #     torch.distributed.is_available()
+#     #     and torch.distributed.is_initialized()
+#     #     and torch.distributed.get_world_size() > 1
+#     #     and args.use_unsloth
+#     # ):
+#     #     raise NotImplementedError("Unsloth is not supported in distributed training")
 
 #     if args.use_4bit_quantization:
 #         compute_dtype = getattr(torch, args.bnb_4bit_compute_dtype)
@@ -752,15 +766,16 @@ def create_datasets(tokenizer, data_args, apply_chat_template=False):
 #         elif args.use_8bit_quantization:
 #             bnb_config = BitsAndBytesConfig(load_in_8bit=args.use_8bit_quantization)
 
-#     if args.use_unsloth:
-#         # Load model
-#         model, _ = FastLanguageModel.from_pretrained(
-#             model_name=args.model_name_or_path,
-#             max_seq_length=training_args.max_seq_length,
-#             dtype=None,
-#             load_in_4bit=args.use_4bit_quantization,
-#         )
-#     else:
+#     # if args.use_unsloth:
+#     #     # Load model
+#     #     model, _ = FastLanguageModel.from_pretrained(
+#     #         model_name=args.model_name_or_path,
+#     #         max_seq_length=training_args.max_seq_length,
+#     #         dtype=None,
+#     #         load_in_4bit=args.use_4bit_quantization,
+#     #     )
+#     #else:
+#     if True:
 #         torch_dtype = (
 #             quant_storage_dtype if quant_storage_dtype and quant_storage_dtype.is_floating_point else torch.float32
 #         )
@@ -820,19 +835,19 @@ def create_datasets(tokenizer, data_args, apply_chat_template=False):
 #         tokenizer = AutoTokenizer.from_pretrained(args.model_name_or_path, trust_remote_code=True)
 #         tokenizer.pad_token = tokenizer.eos_token
 
-#     if args.use_unsloth:
-#         # Do model patching and add fast LoRA weights
-#         model = FastLanguageModel.get_peft_model(
-#             model,
-#             lora_alpha=args.lora_alpha,
-#             lora_dropout=args.lora_dropout,
-#             r=args.lora_r,
-#             target_modules=args.lora_target_modules.split(",")
-#             if args.lora_target_modules != "all-linear"
-#             else args.lora_target_modules,
-#             use_gradient_checkpointing=training_args.gradient_checkpointing,
-#             random_state=training_args.seed,
-#             max_seq_length=training_args.max_seq_length,
-#         )
+#     # if args.use_unsloth:
+#     #     # Do model patching and add fast LoRA weights
+#     #     model = FastLanguageModel.get_peft_model(
+#     #         model,
+#     #         lora_alpha=args.lora_alpha,
+#     #         lora_dropout=args.lora_dropout,
+#     #         r=args.lora_r,
+#     #         target_modules=args.lora_target_modules.split(",")
+#     #         if args.lora_target_modules != "all-linear"
+#     #         else args.lora_target_modules,
+#     #         use_gradient_checkpointing=training_args.gradient_checkpointing,
+#     #         random_state=training_args.seed,
+#     #         max_seq_length=training_args.max_seq_length,
+#     #     )
 
 #     return model, peft_config, tokenizer

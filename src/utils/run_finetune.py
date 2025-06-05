@@ -1,18 +1,25 @@
 import os
 import sys
 
-# import unsloth
 from transformers import HfArgumentParser
 from trl import SFTConfig
 from utils import LocalModelArguments, DatasetArguments
 from datasets import DatasetDict
+
+import torch
+import numpy as np
+
+# needed for loading models
+#torch.serialization.add_safe_globals([np.core.multiarray._reconstruct])
+
+# See: https://pytorch.org/docs/stable/notes/serialization.html#torch.serialization.add_safe_globals
+torch.serialization.add_safe_globals([np._core.multiarray._reconstruct, np.ndarray, np.dtype, np.dtypes.UInt32DType])
 
 #os.environ["CUDA_VISIBLE_DEVICES"] = "1" 
 
 def main(local_model_args : LocalModelArguments, data_args : DatasetArguments, training_args : SFTConfig):
     from transformers import set_seed
     from trl import SFTTrainer
-    import utils
     from utils import LocalPLM
     
     if not local_model_args.model_name_or_path:
@@ -21,12 +28,15 @@ def main(local_model_args : LocalModelArguments, data_args : DatasetArguments, t
     # Set seed for reproducibility
     set_seed(training_args.seed)
 
-
-    # import datasets
-    # dataset = datasets.load_dataset("json", data_files=data_args.dataset) 
-    # if type(dataset) is DatasetDict: dataset = dataset['train']
-    # if data_args.test_size:
-    #     dataset = dataset.train_test_split(data_args.test_size)
+    # Load training/evaluation dataset
+    import datasets
+    dataset = datasets.load_dataset("json", data_files=data_args.dataset) 
+    if type(dataset) is DatasetDict: dataset = dataset['train']
+    if data_args.test_size:
+        dataset = dataset.train_test_split(data_args.test_size)
+    
+    if data_args.num_shards > 0:
+        dataset = dataset.shard(data_args.num_shards, data_args.shard_index)
     
     # import preprocess as pre
     # dataset, label_names = pre.load_dataset(
@@ -55,9 +65,6 @@ def main(local_model_args : LocalModelArguments, data_args : DatasetArguments, t
     
     # model
     model = LocalPLM(local_model_args, training_args=training_args)
-    
-    # Load training/evaluation dataset
-    dataset = utils.create_datasets(model.tokenizer, data_args)
     
     import subprocess
     subprocess.run(["nvidia-smi"])
