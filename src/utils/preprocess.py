@@ -529,6 +529,8 @@ def load_dataset(
         balanced : bool = False,
         ratio : float | None = None,
         size : int | None = None,
+        num_shards : int | None = None,
+        shard_index : int | None = None,
         split : str | None = None) -> tuple[Dataset | DatasetDict, dict]:
     """
     Load and pre-process a supervised text classification dataset.
@@ -575,6 +577,13 @@ def load_dataset(
             dataset = undersample_dataset(dataset, ratio=ratio, size=size, label_columns=label_columns)
         else:
             dataset = sample_dataset(dataset, ratio=ratio, size=size) 
+    
+    if num_shards and shard_index:
+        if type(dataset) is Dataset:
+            dataset = dataset.shard(num_shards, shard_index)
+        elif type(dataset) is DatasetDict:
+            for subset in dataset.keys():
+                dataset[subset] = dataset[subset].shard(num_shards,shard_index)
 
     dataset, label_names = preprocess_dataset(dataset,text_columns=text_columns,label_columns=label_columns)
 

@@ -27,16 +27,28 @@ def main(local_model_args : LocalModelArguments, data_args : DatasetArguments, t
 
     # Set seed for reproducibility
     set_seed(training_args.seed)
-
-    # Load training/evaluation dataset
-    import datasets
-    dataset = datasets.load_dataset("json", data_files=data_args.dataset) 
-    if type(dataset) is DatasetDict: dataset = dataset['train']
-    if data_args.test_size:
-        dataset = dataset.train_test_split(data_args.test_size)
     
-    if data_args.num_shards > 0:
-        dataset = dataset.shard(data_args.num_shards, data_args.shard_index)
+    if data_args.dataset.endswith(".csv"):
+        # Load dataset
+        import preprocess as pre
+        dataset, _ = pre.load_dataset(
+            data_args.dataset,
+            text_columns="content", # Hardcoded
+            label_columns="label", # Hardcoded
+            test_size = data_args.test_size,
+            num_shards=data_args.num_shards,
+            shard_index=data_args.shard_index
+        )
+    else:
+        # Load training/evaluation dataset
+        import datasets
+        dataset = datasets.load_dataset("json", data_files=data_args.dataset) 
+        if type(dataset) is DatasetDict: dataset = dataset['train']
+        if data_args.test_size:
+            dataset = dataset.train_test_split(data_args.test_size)
+        
+        if data_args.num_shards > 0:
+            dataset = dataset.shard(data_args.num_shards, data_args.shard_index)
 
     dataset = dataset.shuffle(seed=training_args.seed) # Randomly shuffle data
     
