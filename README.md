@@ -60,10 +60,8 @@ python src/utils/run_finetune.py finetune_args.json
   {
     "dataset" : "data_combined.json",
     "test_size" : 0,
-    "ratio" : 1,
     "model_name_or_path" : "microsoft/Phi-4-mini-instruct",
     "cuda_devices" : "0",
-    "use_unsloth" : true,
     "use_4bit_quantization" : true,
     "bnb_4bit_quant_type" : "nf4",
     "bnb_4bit_compute_dtype" : "float16",
