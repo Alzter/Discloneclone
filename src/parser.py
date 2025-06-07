@@ -204,7 +204,7 @@ def to_string(messages : pd.DataFrame, header : bool = False, timestamps : bool 
 
     if type(target_user) is str: target_user = target_user.lower()
 
-    if context: string += "\nContext of the conversation:\n" + context
+    if context: string += "\n" + context
 
     for i, message in messages.iterrows():
         author = message.Author if (usernames or message.Author.lower() == target_user) else "user"
@@ -267,7 +267,7 @@ def to_chat_template(messages : pd.DataFrame, target_user : str, system_prompt :
 
     return {"messages" : chat_messages}
 
-def to_dataset(messages : pd.DataFrame | list[pd.DataFrame], target_user : str, system_prompt : str = "", context_length : int = 50, usernames : bool = False, timestamps : bool = False, max_context_time : timedelta | None = timedelta(minutes=120), packing : bool = True) -> list[dict]:
+def to_dataset(messages : pd.DataFrame | list[pd.DataFrame], target_user : str, system_prompt : str = "", context_length : int = 50, usernames : bool = False, timestamps : bool = False, max_context_time : timedelta | None = timedelta(minutes=120), packing : bool = True, chat_format : bool = True) -> list[dict] | pd.DataFrame:
     """
     Convert a Discord conversation or list of conversations into a supervised Q&A dataset from the perspective of a given user.
     This dataset can then be used to fine-tune a PLM to impersonate the user.
@@ -285,30 +285,41 @@ def to_dataset(messages : pd.DataFrame | list[pd.DataFrame], target_user : str, 
                                                        each conversation is greater than the given amount. Defaults to timedelta(minutes=120).
         packing (bool, optional): Concatenates all consecutive messages by the target user using line breaks to reduce dataset size.
                                   If enabled, dataset will be smaller but LLM responses will be larger. Defaults to True.
+        chat_format (bool, optional): Return results as OpenAI chat templates (dict) rather than a Q&A dataset (dataframe). Defaults to True.
         
     Returns:
-        dataset (list[dict]): A Q&A dataset made out of the Discord conversations in OpenAI chat format.
+        dataset (list[dict] | DataFrame): A Q&A dataset made out of the Discord conversations in OpenAI chat format.
     """
     
     if type(messages) is pd.DataFrame:
         if max_context_time is not None:
-            if "Start" not in messages:
+            if "Start" not in messages: # Don't split by conversations more than once. We add a "Start" column once we've done one split.
                 messages = split_by_conversations(messages, max_context_time)
         if packing: messages = group_consecutive(messages, target_user)
-    # 
-    data = []
+    
+    if chat_format:
+        data = []
+    else:
+        data = {"content":[], "label":[]}
     
     # If we're dealing with a list of messages,
     # call this function recursively.
     if type(messages) is list:
+        
+        if not chat_format:
+            data = pd.DataFrame(data)
 
         for message in messages:
             # Process the messages sequentially
-            message_data = to_dataset(message, target_user=target_user, system_prompt=system_prompt, context_length=context_length, usernames=usernames, timestamps=timestamps, max_context_time=max_context_time) 
+            message_data = to_dataset(message, target_user=target_user, system_prompt=system_prompt, context_length=context_length, usernames=usernames, timestamps=timestamps, max_context_time=max_context_time, chat_format=chat_format) 
             
             # Append each message data to the end of the dict
-            data.extend(message_data) 
-         
+            if type(data) is list:
+                data.extend(message_data)
+            elif type(data) is pd.DataFrame:
+                data = pd.concat([data, message_data])
+        
+        if type(data) is pd.DataFrame: data = data.reset_index(drop=True)
         return data
 
     elif type(messages) is pd.DataFrame:
@@ -319,7 +330,7 @@ def to_dataset(messages : pd.DataFrame | list[pd.DataFrame], target_user : str, 
         
         # If there's no messages by the user and others, return nothing
         if not target_user_indices or not other_user_indices:
-            return [] 
+            return [] if chat_format else pd.DataFrame(data) 
 
         # Remove all messages from target user which aren't preceded by
         # a different user's message at the start of the conversation.
@@ -342,17 +353,30 @@ def to_dataset(messages : pd.DataFrame | list[pd.DataFrame], target_user : str, 
             other_user_first_msg_index = other_user_subindices[0]
             chat = chat.iloc[other_user_first_msg_index:]
             if len(chat) == 0: continue
-
-            # Convert inputs/outputs to string
-            chat = to_chat_template(chat, system_prompt=system_prompt, target_user=target_user, usernames=usernames, timestamps=timestamps)
             
-            data.append(chat)
+            if chat_format and type(data) is list:
+                # Convert inputs/outputs to string
+                chat = to_chat_template(chat, system_prompt=system_prompt, target_user=target_user, usernames=usernames, timestamps=timestamps)
+                data.append(chat)
+
+            elif not chat_format and type(data) is dict:
+                inputs = msgs.iloc[:-1]
+                output = msgs.iloc[[-1]]
+
+                # Convert inputs/outputs to string
+                inputs = to_string(inputs, header=False, context=system_prompt, timestamps=timestamps, usernames=usernames, target_user=target_user)
+                output = to_string(output, header=False, timestamps=timestamps, usernames=usernames, target_user=target_user)
+
+                data['content'].append(inputs)
+                data['label'].append(output)
         
+        if not chat_format:
+            data = pd.DataFrame(data)
         return data
 
     raise ValueError("Messages must be DataFrame or List")
 
-def create_dataset(files : str | list[str], target_user : str, system_prompt : str = "", usernames : bool = False, timestamps : bool = False, context_length : int = 50, max_context_time : timedelta | None = timedelta(minutes=120), packing : bool = True) -> list[dict]:
+def create_dataset(files : str | list[str], target_user : str, system_prompt : str = "", usernames : bool = False, timestamps : bool = False, context_length : int = 50, max_context_time : timedelta | None = timedelta(minutes=120), packing : bool = True, chat_format : bool = True) -> list[dict] | pd.DataFrame:
     """
     Convert a list of Discord conversations into a supervised Q&A dataset from the perspective of a given user.
     This dataset can then be used to fine-tune a PLM to impersonate the user.
@@ -370,6 +394,7 @@ def create_dataset(files : str | list[str], target_user : str, system_prompt : s
                                                        each conversation is greater than the given amount. Defaults to timedelta(minutes=120).
         packing (bool, optional): Concatenates all consecutive messages by the target user using line breaks to reduce dataset size.
                                   If enabled, dataset will be smaller but LLM responses will be larger. Defaults to True.
+        chat_format (bool, optional): Return results as OpenAI chat templates (dict) rather than a Q&A dataset (dataframe). Defaults to True.
     
     Returns:
         dataset (DataFrame): A Q&A dataset made out of the Discord conversations. Has two columns, "content" (inputs) and "labels" (output message).
@@ -377,16 +402,26 @@ def create_dataset(files : str | list[str], target_user : str, system_prompt : s
 
     if type(files) is str: files = [files]
 
-    data = [] 
+    if chat_format:
+        data = [] 
+    else:
+        data = pd.DataFrame({"content":[],"label":[]})
     
     for file in tqdm(files, "Preprocessing Discord Conversations"):
 
         try:
             chat = parse_discord_conversation_csv(file)
-            chat = to_dataset(chat, target_user, system_prompt=system_prompt, context_length=context_length, max_context_time=max_context_time, packing=packing, usernames=usernames, timestamps=timestamps)
-            data.extend(chat)
+            chat = to_dataset(chat, target_user, system_prompt=system_prompt, context_length=context_length, max_context_time=max_context_time, packing=packing, usernames=usernames, timestamps=timestamps, chat_format=chat_format)
+            
+            if type(data) is list: 
+                data.extend(chat)
+            elif type(data) is pd.DataFrame:
+                data = pd.concat([data, chat])
 
         except Exception as e:
             warnings.warn(f"Error reading Discord conversation history file at path {file}. Traceback: {str(e)}. Ignoring the file and proceeding.")
-        
+    
+    if type(data) is pd.DataFrame:
+        data = data.reset_index(drop=True)
+
     return data
