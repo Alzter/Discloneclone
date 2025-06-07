@@ -37,6 +37,8 @@ def main(local_model_args : LocalModelArguments, data_args : DatasetArguments, t
     
     if data_args.num_shards > 0:
         dataset = dataset.shard(data_args.num_shards, data_args.shard_index)
+
+    dataset = dataset.shuffle(seed=training_args.seed) # Randomly shuffle data
     
     # import preprocess as pre
     # dataset, label_names = pre.load_dataset(
