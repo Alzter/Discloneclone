@@ -146,6 +146,10 @@ def split_by_conversations(messages : pd.DataFrame, max_context_time : timedelta
         """
         start_indices = messages[messages["Start"] == True].index
 
+        # If there's only one Start index, return all messages from then 
+        if len(start_indices) == 1:
+            return [list(range(start_indices[0], len(messages)))]
+
         indices = []
         for i in range(len(start_indices)):
             if i >= len(start_indices) - 1: continue
@@ -250,10 +254,10 @@ def to_chat_template(messages : pd.DataFrame, target_user : str, system_prompt :
         # Add message user and timestamps if needed
         content = ""
         metadata = []
-
+    
         author = message.Author if message.Author == target_user else "user"
 
-        if usernames: metadata.append(author)
+        if usernames or True: metadata.append(message.Author if usernames else author)
         if timestamps: metadata.append(message.Date.strftime("%H:%M:%S"))
         
         if metadata:

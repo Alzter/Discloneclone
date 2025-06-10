@@ -75,15 +75,17 @@ def understand_conversation(bot, message_df : pd.DataFrame, context : str | None
     """
 
     understanding = agent.understand_conversation_pov(message_df, "alzter", context=context, tokens=128)
+    
+    print(understanding)
 
     return understanding
 
 def generate_reply(bot, message_history : list) -> str:
     message_df = to_dataframe(bot, message_history)
 
-    # understanding = understand_conversation(bot, message_df)
+    understanding = understand_conversation(bot, message_df)
     
-    response = agent.reply(message_df)#, context=understanding.relationship)
+    response = agent.reply(message_df, context=understanding.topic)
 
     return response 
 
@@ -92,8 +94,8 @@ async def on_message(message):
     
     if message.author == bot.user: return
          
-    print(message.content)
-    print(message.author)
+    # print(message.content)
+    # print(message.author)
     
     # await message.channel.send("hi")
     
