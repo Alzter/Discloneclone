@@ -333,7 +333,7 @@ You often use internet slang and text emoticons in your messages. The time is {l
         return SYSTEM_PROMPT
 
 
-    def reply(self, messages : pd.DataFrame, context : str | None = None) -> str:
+    def reply(self, messages : pd.DataFrame, context : str | None = None, max_lines : int | None = None) -> str:
         """
         Reply to a Discord conversation using a DataFrame of conversation history.
         """
@@ -364,9 +364,10 @@ You often use internet slang and text emoticons in your messages. The time is {l
         
 
         print(f"\nResponse: {response}")
-
-        # Only capture the first 2 lines of Alzter's response.
-        response = "\n".join(response.strip().split("\n")[:3])
+        
+        if max_lines:
+            # Only capture the first 2 lines of Alzter's response.
+            response = "\n".join(response.strip().split("\n")[:(max_lines + 1)])
         
         # Fix line breaks
         response = response.replace("\\n", "\n")
