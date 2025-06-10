@@ -1,8 +1,10 @@
 data
 models
 app
-notebooks
-scripts
+unsloth_compiled_cache
+/unsloth_compiled_cache
+# notebooks
+# scripts
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
