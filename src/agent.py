@@ -4,7 +4,7 @@ import parser
 from utils.utils import LocalPLM, LocalModelArguments
 from dataclasses import dataclass, field
 from tqdm import tqdm
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, UTC
 
 @dataclass
 class ChatUnderstanding():
@@ -19,9 +19,9 @@ class ChatUnderstanding():
     )
 
 class Agent:
-    def __init__(self):
+    def __init__(self, use_base_model : bool = False):
         args = LocalModelArguments(
-            model_name_or_path = "../models/TestLocal/checkpoint-16500",
+            model_name_or_path = "../models/TestLocal/checkpoint-19000" if not use_base_model else "microsoft/Phi-4-mini-instruct",
             cuda_devices = "0",
             use_4bit_quantization = True,
             bnb_4bit_quant_type = "nf4",
@@ -31,18 +31,6 @@ class Agent:
         )
 
         self.model = LocalPLM(args)
-
-        args = LocalModelArguments(
-            model_name_or_path = "microsoft/Phi-4-mini-instruct",
-            cuda_devices = "0",
-            use_4bit_quantization = True,
-            bnb_4bit_quant_type = "nf4",
-            bnb_4bit_compute_dtype = "float16",
-            use_nested_quant = True,
-            use_reentrant = True
-        )
-
-        self.base_model = LocalPLM(args)
 
     def gen_prompt(self, messages : pd.DataFrame, prompt : str, context : str | None = None, context_role : Literal["system", "user"] = "system") -> list[dict[str,str]]:
         """
@@ -92,18 +80,18 @@ class Agent:
         """
         interest_prompt=f"Read the following conversation and tell me how interested {target_user} sounds in it. Be succinct."
         interest_prompt = self.gen_prompt(messages, interest_prompt, context=context, context_role=context_role)
-        interest = self.base_model.generate(interest_prompt,max_new_tokens = 64).text
+        interest = self.model.generate(interest_prompt,max_new_tokens = 64).text
 
         relationship_prompt= f"Read the following conversation history and tell me what you think the relationship is between the users. Answer succinctly."
 
         if context: context += ", " + interest
         else: context = interest
         relationship_prompt = self.gen_prompt(messages, relationship_prompt, context=context, context_role=context_role)
-        relationship = self.base_model.generate(relationship_prompt,temperature=1,max_new_tokens = 128).text
+        relationship = self.model.generate(relationship_prompt,temperature=1,max_new_tokens = 128).text
 
         topic_prompt="Read the following conversation history and tell me what was discussed. Answer succinctly."
         topic_prompt = self.gen_prompt(messages, topic_prompt, context=relationship + ", " + interest, context_role=context_role)
-        topic = self.base_model.generate(topic_prompt,temperature=1,max_new_tokens = tokens).text
+        topic = self.model.generate(topic_prompt,temperature=1,max_new_tokens = tokens).text
 
         #return f"Conversation topic:\n{topic}\n\nRelationship between users:\n{relationship}\n\nPersonal interest:\n{interest}"
         return ChatUnderstanding(interest=interest,relationship=relationship,topic=topic)
@@ -138,18 +126,18 @@ class Agent:
 
         interest_prompt=f"Your name is {target_user}. Read one of your past text conversations with {other_users} and tell me how interested you were during it. Respond with first person perspective. Be succinct."
         interest_prompt = self.gen_prompt(messages, interest_prompt, context=context, context_role=context_role)
-        interest = self.base_model.generate(interest_prompt,max_new_tokens = 64).text
+        interest = self.model.generate(interest_prompt,max_new_tokens = 64).text
 
         relationship_prompt= f"Your name is {target_user}. Read one of your past text conversations with {other_users} and tell me what your relationship is with them. Respond with first person perspective. Be succinct."
 
         if context: context += ", " + interest
         else: context = interest
         relationship_prompt = self.gen_prompt(messages, relationship_prompt, context=context, context_role=context_role)
-        relationship = self.base_model.generate(relationship_prompt,temperature=1,max_new_tokens = 128).text
+        relationship = self.model.generate(relationship_prompt,temperature=1,max_new_tokens = 128).text
 
         topic_prompt=f"Your name is {target_user}. Read one of your past text conversations with {other_users} and tell me what you were talking about. Respond with first person perspective. Be succinct."
         topic_prompt = self.gen_prompt(messages, topic_prompt, context=relationship + ", " + interest, context_role=context_role)
-        topic = self.base_model.generate(topic_prompt,temperature=1,max_new_tokens = tokens).text
+        topic = self.model.generate(topic_prompt,temperature=1,max_new_tokens = tokens).text
 
         #return f"Conversation topic:\n{topic}\n\nMy relationship with {other_users}:\n{relationship}\n\nMy interest in the conversation:\n{interest}"
         # return {"interest":interest,"relationship":relationship,"topic":topic}
@@ -171,7 +159,7 @@ Read the conversation, then tell me what you are thinking as you say:
         
         thought_prompt = self.gen_prompt(conversation, thought_prompt, context=context)
         
-        predicted_thought = self.base_model.generate(thought_prompt, temperature=1, max_new_tokens=tokens).text
+        predicted_thought = self.model.generate(thought_prompt, temperature=1, max_new_tokens=tokens).text
         
         return predicted_thought
 
@@ -314,9 +302,9 @@ Read the conversation, then tell me what you are thinking as you say:
         return data
 
     def get_prompt(self):
-        local_time = datetime.now().strftime("%A %B %Y, %-I:%M %p")
+        local_time = datetime.now().strftime("%A, %B 2020, %-I:%M %p")
         
-        EXTRA_CONTEXT = f"""
+        EXTRA_CONTEXT = """
 You live away from Mum and Dad in an apartment in Hawthorn.
 Your brother is steamingsheep (Nick) who lives in Melbourne.
 You have a joke with Nick where you often talk about a dog named Grevald.
@@ -328,33 +316,31 @@ Your enemy is AlzterBot (Fake Alex), a clone of yourself that you created using 
 You are alzter, a Discord user known for your art and programming skills.
 Your real name is Alex, you live in Melbourne, Australia, and you study computer science at university.
 {EXTRA_CONTEXT}
-You often use internet slang and text emoticons in your messages. The time is {local_time}.""".strip().replace("\n", " ")
+You often use internet slang and text emoticons in your messages. The time is {local_time}.
+Do not repeat your previous messages when responding.""".strip().replace("\n", " ")
 
         return SYSTEM_PROMPT
 
 
-    def reply(self, messages : pd.DataFrame, context : str | None = None, max_lines : int | None = None) -> str:
+    def reply(self, messages : pd.DataFrame, context : str | None = None, max_context_time : timedelta = timedelta(minutes=50), max_lines : int | None = None) -> str:
         """
         Reply to a Discord conversation using a DataFrame of conversation history.
         """
         
         # Sort messages chronologically
         messages = messages.sort_values(by="Date")
-         
-        # Pick out the most recent conversation
-        # recent_messages = parser.split_by_conversations(messages, max_context_time = timedelta(minutes=10), min_conv_length=1)
-        # if recent_messages: recent_messages = recent_messages[-1]
-        # else: raise Exception("Couldn't find latest conversation")
-
-        recent_messages=messages
         
+        # Extract only recent messages
+        recent_messages = messages[ messages["Date"].apply(lambda x: datetime.now(UTC) - x < max_context_time )]
+
         # Get model system prompt
         system_prompt = self.get_prompt()
 
-        system_prompt += "\n\nContext of the conversation:\n" + context
+        if context:
+            system_prompt += "\n\nContext of the conversation:\n" + context
 
         # Create chat template so model can respond to messages
-        chat_template = parser.to_chat_template(recent_messages, timestamps=False, usernames=True, target_user="alzter", system_prompt=system_prompt)["messages"]
+        chat_template = parser.to_chat_template(recent_messages, timestamps=True, usernames=True, target_user="alzter", system_prompt=system_prompt)["messages"]
         
         for i in chat_template:
             print(f"{i["role"]} : {i["content"]}")

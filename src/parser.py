@@ -185,7 +185,7 @@ def get_header(messages : pd.DataFrame, target_user : str | None = None) -> str:
 
     string = "Conversation between " + ", ".join(users) + "."
 
-    string += "\nObtained " + end_time.strftime("%y/%m/%d, %H:%M:%S") + "."
+    string += "\nObtained " + end_time.strftime("%a, %b 2020, %-I:%M %p") + "."
 
     return string
 
@@ -213,7 +213,8 @@ def to_string(messages : pd.DataFrame, header : bool = False, timestamps : bool 
     for i, message in messages.iterrows():
         author = message.Author if (usernames or message.Author.lower() == target_user) else "user"
         string += "\n\n" + author
-        if timestamps: string += " " + message.Date.strftime("%H:%M:%S")
+        # Hard-code the year to be 2020 (don't want the model's behaviour to correlate with year)
+        if timestamps: string += " " + message.Date.strftime("(%a, %b 2020, %-I:%M %p)")
         string += "\n" + message.Content
 
     return string.strip()
@@ -238,7 +239,7 @@ def to_chat_template(messages : pd.DataFrame, target_user : str, system_prompt :
 
     metadata = []
     if usernames or True: metadata.append("username")
-    if timestamps: metadata.append("timestamp")
+    if timestamps: metadata.append("(timestamp)")
     metadata = " ".join(metadata)
     if metadata:
         system_prompts.append(f"Messages are formatted as <{metadata}>:\n<message>")
@@ -258,7 +259,10 @@ def to_chat_template(messages : pd.DataFrame, target_user : str, system_prompt :
         author = message.Author if message.Author == target_user else "user"
 
         if usernames or True: metadata.append(message.Author if usernames else author)
-        if timestamps: metadata.append(message.Date.strftime("%H:%M:%S"))
+        # Exclude timestamp from final message
+        if timestamps and not i >= len(messages) - 1:
+            # Hard-code the year to be 2020 (don't want the model's behaviour to correlate with year)
+            metadata.append(message.Date.strftime("(%a, %b 2020, %-I:%M %p)"))
         
         if metadata:
             metadata = " ".join(metadata) + ":"
@@ -369,7 +373,7 @@ def to_dataset(messages : pd.DataFrame | list[pd.DataFrame], target_user : str, 
 
                 # Convert inputs/outputs to string
                 inputs = to_string(inputs, header=False, context=system_prompt, timestamps=timestamps, usernames=usernames, target_user=target_user)
-                output = to_string(output, header=False, timestamps=timestamps, usernames=usernames, target_user=target_user)
+                output = to_string(output, header=False, timestamps=False, usernames=usernames, target_user=target_user)
 
                 data['content'].append(inputs)
                 data['label'].append(output)
