@@ -83,9 +83,9 @@ def understand_conversation(bot, message_df : pd.DataFrame, context : str | None
 def generate_reply(bot, message_history : list) -> str:
     message_df = to_dataframe(bot, message_history)
 
-    understanding = understand_conversation(bot, message_df)
+    # understanding = understand_conversation(bot, message_df)
     
-    response = agent.reply(message_df, context=understanding.topic)
+    response = agent.reply(message_df)#, context=understanding.topic)
 
     return response 
 
